@@ -1,117 +1,143 @@
 const fs = require("fs");
 const path = require("path");
 
-module.exports = async (req, res) => {
+// Função para ler o arquivo whitelist
+function readWhitelist() {
   try {
-    // Configurar CORS se necessário
+    const whitelistPath = path.join(__dirname, "whitelist.json");
+    if (fs.existsSync(whitelistPath)) {
+      const data = fs.readFileSync(whitelistPath, "utf8");
+      return JSON.parse(data);
+    }
+    return {};
+  } catch (error) {
+    console.error("Erro ao ler whitelist:", error);
+    return {};
+  }
+}
+
+// Função para salvar o arquivo whitelist
+function saveWhitelist(whitelist) {
+  try {
+    const whitelistPath = path.join(__dirname, "whitelist.json");
+    fs.writeFileSync(whitelistPath, JSON.stringify(whitelist, null, 2), "utf8");
+    return true;
+  } catch (error) {
+    console.error("Erro ao salvar whitelist:", error);
+    return false;
+  }
+}
+
+module.exports = (req, res) => {
+  // Log para debug
+  console.log("API chamada - Método:", req.method);
+  console.log("Body:", req.body);
+
+  try {
+    // Configurar headers
+    res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    
-    // Handle preflight OPTIONS request
+
+    // Handle preflight
     if (req.method === 'OPTIONS') {
-      return res.status(200).end();
+      res.status(200).end();
+      return;
     }
 
-    // Rejeita requisições que não sejam POST
-    if (req.method !== "POST") {
-      return res.status(405).json({ 
+    // Verificar método
+    if (req.method !== 'POST') {
+      res.status(405).json({ 
         success: false, 
         error: "Método não permitido. Use POST." 
       });
+      return;
     }
 
-    // Parse do body se necessário
+    // Extrair dados
     let body = req.body;
+    
+    // Se body é string, fazer parse
     if (typeof body === 'string') {
       try {
         body = JSON.parse(body);
       } catch (e) {
-        return res.status(400).json({ 
+        res.status(400).json({ 
           success: false, 
           error: "JSON inválido" 
         });
+        return;
       }
     }
 
-    const { key, hwid } = body;
+    const { key, hwid } = body || {};
 
-    // Validação da key
+    // Validar key
     if (!key) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         success: false, 
         error: "Key missing" 
       });
+      return;
     }
 
-    // Caminho para o arquivo whitelist
-    const whitelistPath = path.resolve(process.cwd(), "whitelist.json");
+    // Ler whitelist
+    const whitelist = readWhitelist();
     
-    let whitelist = {};
-    
-    // Lê o arquivo whitelist se existir
-    try {
-      if (fs.existsSync(whitelistPath)) {
-        const whitelistData = fs.readFileSync(whitelistPath, "utf8");
-        whitelist = JSON.parse(whitelistData);
-      }
-    } catch (error) {
-      console.error("Erro ao ler whitelist:", error);
-      return res.status(500).json({ 
-        success: false, 
-        error: "Erro interno do servidor" 
-      });
-    }
-
-    // Verifica se a key existe na whitelist
+    // Verificar se key existe
     if (!whitelist[key]) {
-      return res.status(401).json({ 
+      res.status(401).json({ 
         success: false, 
         error: "Key inválida" 
       });
+      return;
     }
 
-    // Se não há HWID vinculado, vincula o atual
-    if (!whitelist[key].hwid || whitelist[key].hwid === "") {
-      whitelist[key].hwid = hwid || "";
+    const keyData = whitelist[key];
+
+    // Se HWID não está definido ou está vazio, vincular
+    if (!keyData.hwid || keyData.hwid === "") {
+      keyData.hwid = hwid || "";
       
-      try {
-        fs.writeFileSync(whitelistPath, JSON.stringify(whitelist, null, 2), "utf8");
-        return res.json({ 
+      if (saveWhitelist(whitelist)) {
+        res.json({ 
           success: true, 
           action: "HWID vinculado",
           message: "HWID foi vinculado com sucesso à key",
-          discordId: whitelist[key].discordId
+          discordId: keyData.discordId
         });
-      } catch (error) {
-        console.error("Erro ao salvar whitelist:", error);
-        return res.status(500).json({ 
+      } else {
+        res.status(500).json({ 
           success: false, 
           error: "Erro ao salvar dados" 
         });
       }
+      return;
     }
 
-    // Verifica se o HWID corresponde
-    if (whitelist[key].hwid === hwid) {
-      return res.json({ 
+    // Verificar se HWID corresponde
+    if (keyData.hwid === hwid) {
+      res.json({ 
         success: true,
         message: "Autenticação bem-sucedida",
-        discordId: whitelist[key].discordId
+        discordId: keyData.discordId
       });
+      return;
     }
 
     // HWID não corresponde
-    return res.status(403).json({ 
+    res.status(403).json({ 
       success: false, 
       error: "HWID não corresponde" 
     });
 
   } catch (error) {
-    console.error("Erro na API:", error);
-    return res.status(500).json({ 
+    console.error("Erro geral na API:", error);
+    res.status(500).json({ 
       success: false, 
-      error: "Erro interno do servidor" 
+      error: "Erro interno do servidor",
+      details: error.message
     });
   }
 };

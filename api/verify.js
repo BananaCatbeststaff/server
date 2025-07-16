@@ -5,10 +5,19 @@ const path = require("path");
 function readWhitelist() {
   try {
     const whitelistPath = path.join(__dirname, "whitelist.json");
+    console.log("Tentando ler whitelist em:", whitelistPath);
+    console.log("Arquivo existe?", fs.existsSync(whitelistPath));
+    
     if (fs.existsSync(whitelistPath)) {
       const data = fs.readFileSync(whitelistPath, "utf8");
-      return JSON.parse(data);
+      console.log("Conteúdo do arquivo:", data);
+      const parsed = JSON.parse(data);
+      console.log("Dados parseados:", parsed);
+      console.log("Keys disponíveis:", Object.keys(parsed));
+      return parsed;
     }
+    
+    console.log("Arquivo whitelist.json não encontrado!");
     return {};
   } catch (error) {
     console.error("Erro ao ler whitelist:", error);
@@ -72,6 +81,8 @@ module.exports = (req, res) => {
     }
 
     const { key, hwid } = body || {};
+    console.log("Key recebida:", key);
+    console.log("HWID recebido:", hwid);
 
     // Validar key
     if (!key) {
@@ -84,9 +95,11 @@ module.exports = (req, res) => {
 
     // Ler whitelist
     const whitelist = readWhitelist();
+    console.log("Whitelist carregada:", whitelist);
     
     // Verificar se key existe
     if (!whitelist[key]) {
+      console.log("Key não encontrada na whitelist");
       res.status(401).json({ 
         success: false, 
         error: "Key inválida" 

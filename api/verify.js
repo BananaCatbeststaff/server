@@ -2,7 +2,13 @@ const fs = require("fs");
 const path = require("path");
 
 module.exports = (req, res) => {
-  const { key, hwid } = req.query;
+  // Rejeita requisições que não sejam POST
+  if (req.method !== "POST") {
+    return res.status(405).json({ success: false, error: "Método não permitido. Use POST." });
+  }
+
+  // Garante que o corpo da requisição seja interpretado como JSON
+  const { key, hwid } = req.body;
 
   if (!key) {
     return res.status(400).json({ success: false, error: "Key missing" });
